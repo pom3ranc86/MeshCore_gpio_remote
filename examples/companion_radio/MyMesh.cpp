@@ -477,10 +477,65 @@ void MyMesh::sendFloodScoped(const mesh::GroupChannel& channel, mesh::Packet* pk
     sendFlood(pkt, codes, delay_millis);
   }
 }
-
 void MyMesh::onMessageRecv(const ContactInfo &from, mesh::Packet *pkt, uint32_t sender_timestamp,
                            const char *text) {
-  markConnectionActive(from); // in case this is from a server, and we have a connection
+  markConnectionActive(from);
+
+  // Statická proměnná pro uložení posledního timestampu - zůstane v paměti i po skončení funkce
+  static uint32_t last_processed_timestamp = 0;
+
+  if (text != NULL) {
+    // Pokud je timestamp stejný jako minule, je to duplicita od telefonu a ignorujeme ji
+    if (sender_timestamp == last_processed_timestamp) {
+      return; 
+    }
+    last_processed_timestamp = sender_timestamp; // Uložíme si nový timestamp
+
+    uint32_t now = rtc_clock.getCurrentTime();
+    uint32_t ack, tout;
+
+    // --- PŘÍKAZY ---
+    if (strcmp(text, "gpio 42 on") == 0) {
+      digitalWrite(42, HIGH);
+      delay(100);
+      sendMessage(from, now, 0, "GPIO 42: ON", ack, tout);
+    } 
+    else if (strcmp(text, "gpio 42 off") == 0) {
+      digitalWrite(42, LOW);
+      delay(100);
+      sendMessage(from, now, 0, "GPIO 42: OFF", ack, tout);
+    }
+    else if (strcmp(text, "gpio 45 on") == 0) {
+      digitalWrite(45, HIGH);
+      delay(100);
+      sendMessage(from, now, 0, "GPIO 45: ON", ack, tout);
+    } 
+    else if (strcmp(text, "gpio 45 off") == 0) {
+      digitalWrite(45, LOW);
+      delay(100);
+      sendMessage(from, now, 0, "GPIO 45: OFF", ack, tout);
+    }
+    else if (strcmp(text, "gpio 46 on") == 0) {
+      digitalWrite(46, HIGH);
+      delay(100);
+      sendMessage(from, now, 0, "GPIO 46: ON", ack, tout);
+    } 
+    else if (strcmp(text, "gpio 46 off") == 0) {
+      digitalWrite(46, LOW);
+      delay(100);
+      sendMessage(from, now, 0, "GPIO 46: OFF", ack, tout);
+    }
+    else if (strcmp(text, "status") == 0) {
+      char buffer[48];
+      sprintf(buffer, "42:%s 45:%s 46:%s", 
+              digitalRead(42) ? "ON" : "OFF",
+              digitalRead(45) ? "ON" : "OFF",
+              digitalRead(46) ? "ON" : "OFF");
+      delay(100);
+      sendMessage(from, now, 0, buffer, ack, tout);
+    }
+  }
+
   queueMessage(from, TXT_TYPE_PLAIN, pkt, sender_timestamp, NULL, 0, text);
 }
 

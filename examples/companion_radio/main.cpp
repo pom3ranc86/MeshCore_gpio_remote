@@ -183,8 +183,17 @@ void setup() {
   #endif
     the_mesh.startInterface(serial_interface);
 #elif defined(ESP32)
-  SPIFFS.begin(true);
+   SPIFFS.begin(true);
   store.begin();
+  // V main.cpp uvnitř void setup()
+    pinMode(36, OUTPUT); 
+    digitalWrite(36, LOW);  // Zapnutí Vext (napájení periferií u Heltec V3)
+    pinMode(42, OUTPUT);     // Tvůj ovládací GPIO (např. Pin 1)
+    digitalWrite(42, LOW);  // Výchozí stav: vypnuto
+    pinMode(45, OUTPUT);     // Tvůj ovládací GPIO (např. Pin 1)
+    digitalWrite(45, LOW);  // Výchozí stav: vypnuto
+    pinMode(46, OUTPUT);     // Tvůj ovládací GPIO (např. Pin 1)
+    digitalWrite(46, LOW);  // Výchozí stav: vypnuto
   the_mesh.begin(
     #ifdef DISPLAY_CLASS
         disp != NULL

@@ -185,15 +185,16 @@ void setup() {
 #elif defined(ESP32)
    SPIFFS.begin(true);
   store.begin();
-  // V main.cpp uvnitř void setup()
+  // ############################################
     pinMode(36, OUTPUT); 
-    digitalWrite(36, LOW);  // Zapnutí Vext (napájení periferií u Heltec V3)
-    pinMode(42, OUTPUT);     // Tvůj ovládací GPIO (např. Pin 1)
-    digitalWrite(42, LOW);  // Výchozí stav: vypnuto
-    pinMode(45, OUTPUT);     // Tvůj ovládací GPIO (např. Pin 1)
-    digitalWrite(45, LOW);  // Výchozí stav: vypnuto
-    pinMode(46, OUTPUT);     // Tvůj ovládací GPIO (např. Pin 1)
-    digitalWrite(46, LOW);  // Výchozí stav: vypnuto
+    digitalWrite(36, LOW);  
+    pinMode(42, OUTPUT);     
+    digitalWrite(42, LOW);  
+    pinMode(45, OUTPUT);     
+    digitalWrite(45, LOW);  
+    pinMode(46, OUTPUT);     
+    digitalWrite(46, LOW);  
+   // ############################################ 
   the_mesh.begin(
     #ifdef DISPLAY_CLASS
         disp != NULL

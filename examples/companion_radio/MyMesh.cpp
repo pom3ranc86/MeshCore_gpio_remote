@@ -477,24 +477,22 @@ void MyMesh::sendFloodScoped(const mesh::GroupChannel& channel, mesh::Packet* pk
     sendFlood(pkt, codes, delay_millis);
   }
 }
+//############################################################################################################
 void MyMesh::onMessageRecv(const ContactInfo &from, mesh::Packet *pkt, uint32_t sender_timestamp,
                            const char *text) {
   markConnectionActive(from);
 
-  // Statická proměnná pro uložení posledního timestampu - zůstane v paměti i po skončení funkce
   static uint32_t last_processed_timestamp = 0;
 
   if (text != NULL) {
-    // Pokud je timestamp stejný jako minule, je to duplicita od telefonu a ignorujeme ji
     if (sender_timestamp == last_processed_timestamp) {
       return; 
     }
-    last_processed_timestamp = sender_timestamp; // Uložíme si nový timestamp
+    last_processed_timestamp = sender_timestamp; 
 
     uint32_t now = rtc_clock.getCurrentTime();
     uint32_t ack, tout;
 
-    // --- PŘÍKAZY ---
     if (strcmp(text, "gpio 42 on") == 0) {
       digitalWrite(42, HIGH);
       delay(100);
@@ -538,7 +536,7 @@ void MyMesh::onMessageRecv(const ContactInfo &from, mesh::Packet *pkt, uint32_t 
 
   queueMessage(from, TXT_TYPE_PLAIN, pkt, sender_timestamp, NULL, 0, text);
 }
-
+//#######################################################################################################################
 void MyMesh::onCommandDataRecv(const ContactInfo &from, mesh::Packet *pkt, uint32_t sender_timestamp,
                                const char *text) {
   markConnectionActive(from); // in case this is from a server, and we have a connection

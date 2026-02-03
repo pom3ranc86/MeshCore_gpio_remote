@@ -493,44 +493,101 @@ void MyMesh::onMessageRecv(const ContactInfo &from, mesh::Packet *pkt, uint32_t 
     uint32_t now = rtc_clock.getCurrentTime();
     uint32_t ack, tout;
 
-    if (strcmp(text, "gpio 42 on") == 0) {
-      digitalWrite(42, HIGH);
-      delay(100);
-      sendMessage(from, now, 0, "GPIO 42: ON", ack, tout);
-    } 
-    else if (strcmp(text, "gpio 42 off") == 0) {
-      digitalWrite(42, LOW);
-      delay(100);
-      sendMessage(from, now, 0, "GPIO 42: OFF", ack, tout);
+    // Set schedule: "set gpio <pin> <on|off> <HH:MM>" or "set gpio <pin> <on|off> none" to clear
+    if (strncmp(text, "set gpio ", 9) == 0) {
+      const char *p = text + 9;
+      int pin = 0;
+      char mode[8] = {0};
+      char timestr[16] = {0};
+      int items = sscanf(p, "%d %7s %15s", &pin, mode, timestr);
+      if (items >= 2 && (strcmp(mode, "on") == 0 || strcmp(mode, "off") == 0)) {
+        // find index for pin
+        int idx = -1;
+        for (int i = 0; i < _num_schedules; i++) if (_schedules[i].pin == pin) { idx = i; break; }
+        if (idx < 0) {
+          char buf[64];
+          snprintf(buf, sizeof(buf), "Unknown pin %d", pin);
+          sendMessage(from, now, 0, buf, ack, tout);
+        } else {
+                  if (items == 3 && strcmp(timestr, "none") == 0) {
+              // clear relevant schedule
+              if (strcmp(mode, "on") == 0) {
+                _schedules[idx].has_on = false;
+                memset(_schedules[idx].setter_on_prefix, 0, sizeof(_schedules[idx].setter_on_prefix));
+              } else {
+                _schedules[idx].has_off = false;
+                memset(_schedules[idx].setter_off_prefix, 0, sizeof(_schedules[idx].setter_off_prefix));
+              }
+              saveScheduleForPin(pin);
+              char buf[64];
+              snprintf(buf, sizeof(buf), "Cleared %s schedule for %d", mode, pin);
+              sendMessage(from, now, 0, buf, ack, tout);
+            } else if (items == 3) {
+              int hh = -1, mm = -1;
+              if (sscanf(timestr, "%d:%d", &hh, &mm) == 2 && hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) {
+                if (strcmp(mode, "on") == 0) {
+                  _schedules[idx].has_on = true;
+                  _schedules[idx].on_h = hh;
+                  _schedules[idx].on_m = mm;
+                  // record who set this on schedule (6-byte prefix)
+                  memcpy(_schedules[idx].setter_on_prefix, from.id.pub_key, sizeof(_schedules[idx].setter_on_prefix));
+                } else {
+                  _schedules[idx].has_off = true;
+                  _schedules[idx].off_h = hh;
+                  _schedules[idx].off_m = mm;
+                  // record who set this off schedule (6-byte prefix)
+                  memcpy(_schedules[idx].setter_off_prefix, from.id.pub_key, sizeof(_schedules[idx].setter_off_prefix));
+                }
+                saveScheduleForPin(pin);
+                char buf[80];
+                snprintf(buf, sizeof(buf), "Scheduled %s %d at %02d:%02d", mode, pin, hh, mm);
+                sendMessage(from, now, 0, buf, ack, tout);
+              } else {
+                sendMessage(from, now, 0, "Invalid time, use HH:MM or 'none'", ack, tout);
+              }
+            } else {
+              sendMessage(from, now, 0, "Usage: set gpio <pin> <on|off> <HH:MM|none>", ack, tout);
+            }
+        }
+      }
     }
-    else if (strcmp(text, "gpio 45 on") == 0) {
-      digitalWrite(45, HIGH);
-      delay(100);
-      sendMessage(from, now, 0, "GPIO 45: ON", ack, tout);
-    } 
-    else if (strcmp(text, "gpio 45 off") == 0) {
-      digitalWrite(45, LOW);
-      delay(100);
-      sendMessage(from, now, 0, "GPIO 45: OFF", ack, tout);
-    }
-    else if (strcmp(text, "gpio 46 on") == 0) {
-      digitalWrite(46, HIGH);
-      delay(100);
-      sendMessage(from, now, 0, "GPIO 46: ON", ack, tout);
-    } 
-    else if (strcmp(text, "gpio 46 off") == 0) {
-      digitalWrite(46, LOW);
-      delay(100);
-      sendMessage(from, now, 0, "GPIO 46: OFF", ack, tout);
+    // Immediate control: "gpio <pin> on/off"
+    else if (strncmp(text, "gpio ", 5) == 0) {
+      int pin = 0; char action[8] = {0};
+      if (sscanf(text + 5, "%d %7s", &pin, action) >= 2) {
+        if (strcmp(action, "on") == 0) {
+          digitalWrite(pin, HIGH);
+          delay(100);
+          char buf[48]; snprintf(buf, sizeof(buf), "GPIO %d: ON", pin);
+          sendMessage(from, now, 0, buf, ack, tout);
+        } else if (strcmp(action, "off") == 0) {
+          digitalWrite(pin, LOW);
+          delay(100);
+          char buf[48]; snprintf(buf, sizeof(buf), "GPIO %d: OFF", pin);
+          sendMessage(from, now, 0, buf, ack, tout);
+        }
+      }
     }
     else if (strcmp(text, "status") == 0) {
-      char buffer[48];
-      sprintf(buffer, "42:%s 45:%s 46:%s", 
-              digitalRead(42) ? "ON" : "OFF",
-              digitalRead(45) ? "ON" : "OFF",
-              digitalRead(46) ? "ON" : "OFF");
+      char buf[256];
+      int pos = 0;
+      for (int i = 0; i < _num_schedules; i++) {
+        int n = snprintf(buf + pos, sizeof(buf) - pos, "%u:%s", _schedules[i].pin, digitalRead(_schedules[i].pin) ? "ON" : "OFF");
+        pos += n;
+        if (_schedules[i].has_on) {
+          n = snprintf(buf + pos, sizeof(buf) - pos, " on %02d:%02d", _schedules[i].on_h, _schedules[i].on_m);
+          pos += n;
+        }
+        if (_schedules[i].has_off) {
+          n = snprintf(buf + pos, sizeof(buf) - pos, " off %02d:%02d", _schedules[i].off_h, _schedules[i].off_m);
+          pos += n;
+        }
+        if (i < _num_schedules - 1) {
+          n = snprintf(buf + pos, sizeof(buf) - pos, " ; "); pos += n;
+        }
+      }
       delay(100);
-      sendMessage(from, now, 0, buffer, ack, tout);
+      sendMessage(from, now, 0, buf, ack, tout);
     }
   }
 
@@ -830,6 +887,110 @@ uint32_t MyMesh::calcDirectTimeoutMillisFor(uint32_t pkt_airtime_millis, uint8_t
 
 void MyMesh::onSendTimeout() {}
 
+static const uint8_t SCHEDULE_PINS[] = {42, 45, 46};
+static const int NUM_SCHEDULE_PINS = 3;
+
+void MyMesh::loadSchedules() {
+  _num_schedules = NUM_SCHEDULE_PINS;
+  for (int i = 0; i < _num_schedules; i++) {
+    _schedules[i].pin = SCHEDULE_PINS[i];
+    _schedules[i].has_on = false;
+    _schedules[i].has_off = false;
+    memset(_schedules[i].setter_on_prefix, 0, sizeof(_schedules[i].setter_on_prefix));
+    memset(_schedules[i].setter_off_prefix, 0, sizeof(_schedules[i].setter_off_prefix));
+    _last_triggered_day_on[i] = -1;
+    _last_triggered_day_off[i] = -1;
+
+    char key[16];
+    int key_len = sprintf(key, "sched%u", _schedules[i].pin);
+    uint8_t buf[32];
+    int len = getBlobByKey((const uint8_t*)key, key_len, buf);
+    if (len >= 6 && buf[0] == 1) {
+      uint8_t flags = buf[1];
+      _schedules[i].has_on = flags & 0x01;
+      _schedules[i].on_h = buf[2];
+      _schedules[i].on_m = buf[3];
+      _schedules[i].has_off = flags & 0x02;
+      _schedules[i].off_h = buf[4];
+      _schedules[i].off_m = buf[5];
+      if (len >= 17) {
+        memcpy(_schedules[i].setter_on_prefix, &buf[6], 6);
+        memcpy(_schedules[i].setter_off_prefix, &buf[12], 6);
+      }
+    }
+  }
+  _last_checked_minute = -1;
+}
+
+bool MyMesh::saveScheduleForPin(uint8_t pin) {
+  int idx = -1;
+  for (int i = 0; i < _num_schedules; i++) if (_schedules[i].pin == pin) { idx = i; break; }
+  if (idx < 0) return false;
+
+  uint8_t buf[18];
+  buf[0] = 1; // version
+  buf[1] = (_schedules[idx].has_on ? 0x01 : 0x00) | (_schedules[idx].has_off ? 0x02 : 0x00);
+  buf[2] = _schedules[idx].on_h;
+  buf[3] = _schedules[idx].on_m;
+  buf[4] = _schedules[idx].off_h;
+  buf[5] = _schedules[idx].off_m;
+  memcpy(&buf[6], _schedules[idx].setter_on_prefix, 6);
+  memcpy(&buf[12], _schedules[idx].setter_off_prefix, 6);
+
+  char key[16];
+  int key_len = sprintf(key, "sched%u", pin);
+  return putBlobByKey((const uint8_t*)key, key_len, buf, sizeof(buf));
+}
+
+void MyMesh::checkSchedules(uint32_t now) {
+  uint32_t day = now / 86400UL;
+  uint32_t secs = now % 86400UL;
+  int h = secs / 3600;
+  int m = (secs % 3600) / 60;
+  if (m == _last_checked_minute) return; // check once per minute
+  _last_checked_minute = m;
+
+  for (int i = 0; i < _num_schedules; i++) {
+    uint8_t pin = _schedules[i].pin;
+    if (_schedules[i].has_on && _schedules[i].on_h == h && _schedules[i].on_m == m) {
+      if (_last_triggered_day_on[i] != (int32_t)day) {
+        digitalWrite(pin, HIGH);
+        delay(10);
+        _last_triggered_day_on[i] = (int32_t)day;
+        // notify the user who set the ON schedule, if known
+        ContactInfo* recipient = NULL;
+        if (memcmp(_schedules[i].setter_on_prefix, "\0\0\0\0\0\0", 6) != 0) {
+          recipient = lookupContactByPubKey(_schedules[i].setter_on_prefix, 6);
+        }
+        char notif[64];
+        snprintf(notif, sizeof(notif), "Scheduled: GPIO %u: ON", pin);
+        if (recipient) {
+          uint32_t ack2, tout2;
+          sendMessage(*recipient, now, 0, notif, ack2, tout2);
+        }
+      }
+    }
+    if (_schedules[i].has_off && _schedules[i].off_h == h && _schedules[i].off_m == m) {
+      if (_last_triggered_day_off[i] != (int32_t)day) {
+        digitalWrite(pin, LOW);
+        delay(10);
+        _last_triggered_day_off[i] = (int32_t)day;
+        // notify the user who set the OFF schedule, if known
+        ContactInfo* recipient = NULL;
+        if (memcmp(_schedules[i].setter_off_prefix, "\0\0\0\0\0\0", 6) != 0) {
+          recipient = lookupContactByPubKey(_schedules[i].setter_off_prefix, 6);
+        }
+        char notif[64];
+        snprintf(notif, sizeof(notif), "Scheduled: GPIO %u: OFF", pin);
+        if (recipient) {
+          uint32_t ack2, tout2;
+          sendMessage(*recipient, now, 0, notif, ack2, tout2);
+        }
+      }
+    }
+  }
+}
+
 MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMeshTables &tables, DataStore& store, AbstractUITask* ui)
     : BaseChatMesh(radio, *new ArduinoMillis(), rng, rtc, *new StaticPoolPacketManager(16), tables),
       _serial(NULL), telemetry(MAX_PACKET_PAYLOAD - 4), _store(&store), _ui(ui) {
@@ -922,6 +1083,9 @@ void MyMesh::begin(bool has_display) {
 
   radio_set_params(_prefs.freq, _prefs.bw, _prefs.sf, _prefs.cr);
   radio_set_tx_power(_prefs.tx_power_dbm);
+
+  // load persisted GPIO schedules
+  loadSchedules();
 }
 
 const char *MyMesh::getNodeName() {
@@ -2006,6 +2170,9 @@ void MyMesh::checkSerialInterface() {
 
 void MyMesh::loop() {
   BaseChatMesh::loop();
+
+  // check and run scheduled GPIO actions once per minute
+  checkSchedules(rtc_clock.getCurrentTime());
 
   if (_cli_rescue) {
     checkCLIRescueCmd();

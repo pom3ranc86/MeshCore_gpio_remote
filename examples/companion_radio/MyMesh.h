@@ -204,6 +204,27 @@ private:
 
   TransportKey send_scope;
 
+  // GPIO schedules: per-pin daily on/off times (HH:MM)
+  struct GPIOSchedule {
+    uint8_t pin;
+    bool has_on;
+    uint8_t on_h, on_m;
+    bool has_off;
+    uint8_t off_h, off_m;
+    // store 6-byte pubkey prefix of who set the on/off schedule so we can notify them
+    uint8_t setter_on_prefix[6];
+    uint8_t setter_off_prefix[6];
+  };
+  void loadSchedules();
+  bool saveScheduleForPin(uint8_t pin);
+  void checkSchedules(uint32_t now);
+
+  GPIOSchedule _schedules[3];
+  int _num_schedules;
+  int32_t _last_triggered_day_on[3];
+  int32_t _last_triggered_day_off[3];
+  int _last_checked_minute;
+
   uint8_t cmd_frame[MAX_FRAME_SIZE + 1];
   uint8_t out_frame[MAX_FRAME_SIZE + 1];
   CayenneLPP telemetry;

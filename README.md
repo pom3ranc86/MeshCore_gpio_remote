@@ -33,38 +33,6 @@ MeshCore provides the ability to create wireless mesh networks, similar to Mesht
 - Flash the MeshCore firmware on a supported device.
 - Connect with a supported client.
 
-### 🔌 Flashing from the host (Linux)
-If your USB device is visible on the host (for example `/dev/ttyACM0`) and you prefer to flash directly from your host system (outside a VS Code devcontainer), follow these steps:
-
-1. Find the project folder (where `platformio.ini` lives):
-   - `find ~ -type f -name platformio.ini 2>/dev/null`
-   - `cd /path/to/MeshCore_gpio_remote`
-
-2. Install PlatformIO if needed:
-   - `pip3 install --user platformio`
-   - `export PATH="$HOME/.local/bin:$PATH"`
-
-3. Upload the firmware (explicit port):
-   - `pio run -e ESP32C3_SuperMini_companion_radio_ble -t upload -v --upload-port /dev/ttyACM0`
-
-Or use the included helper script from the project root:
-
-```bash
-./scripts/upload_supermini.sh
-# or explicitly set the port:
-UPLOAD_PORT=/dev/ttyACM0 ./scripts/upload_supermini.sh
-```
-
-If you'd rather use the devcontainer, add the device to your devcontainer and rebuild (example `devcontainer.json` snippet):
-
-```json
-"runArgs": [
-  "--device=/dev/ttyACM0:/dev/ttyACM0"
-]
-```
-
-After rebuilding the container, check the device inside it with `ls -l /dev/ttyACM0` and then run the upload command from within the container.
-
 For developers;
 
 - Install [PlatformIO](https://docs.platformio.org) in [Visual Studio Code](https://code.visualstudio.com).
